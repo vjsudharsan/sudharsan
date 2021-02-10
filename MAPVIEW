@@ -1,0 +1,666 @@
+
+MAPVIEW TASK - APP innovation:
+*****************************************
+ViewController Coding:
+--------------------------------
+//
+
+//  ViewController.swift
+
+//  InnovationTaskMap
+
+//
+
+//  Created by Apple on 05/02/21.
+
+//  Copyright © 2021 Apple. All rights reserved.
+
+//
+
+
+
+import UIKit
+
+import MapKit
+
+
+
+class ViewController: UIViewController {
+
+    
+
+    @IBOutlet weak var mapView: MKMapView!
+
+    @IBOutlet weak var locationTableView: UITableView!
+
+    
+
+    var viewmodelclass = Viewmodel()
+
+    var reuseIdentifier = "LocationTableViewCell"
+
+    
+
+    var locationManager = CLLocationManager()
+
+    var currentLocation: CLLocation?
+
+    
+
+    override func viewDidLoad() {
+
+        super.viewDidLoad()
+
+        self.initViewModel()
+
+        
+
+        
+
+        
+
+        if (CLLocationManager.locationServicesEnabled())
+
+        {
+
+            locationManager = CLLocationManager()
+
+            locationManager.delegate = self
+
+            locationManager.desiredAccuracy = kCLLocationAccuracyBest
+
+            locationManager.requestAlwaysAuthorization()
+
+            locationManager.startUpdatingLocation()
+
+        }
+
+    }
+
+
+
+     // reload closure call
+
+
+
+    func initViewModel() {
+
+        viewmodelclass.reloadClosures = {
+
+            [weak self] in
+
+            guard let self = self else { return}
+
+            DispatchQueue.main.async {
+
+                self.locationTableView.reloadData()
+
+            }
+
+        }
+
+        self.viewmodelclass.getMethod()
+
+    }
+
+
+
+    // image loading code from URL
+
+
+
+    func PlaceholderImage(image:UIImage?, imageView:UIImageView?,imgUrl:String,compate:@escaping (UIImage?) -> Void){
+
+        if image != nil && imageView != nil {
+
+            imageView!.image = image!
+
+        }
+
+        var urlcatch = imgUrl.replacingOccurrences(of: "/", with: "#")
+
+        let documentpath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
+
+        urlcatch = documentpath + "/" + "\(urlcatch)"
+
+        let image = UIImage(contentsOfFile:urlcatch)
+
+        if image != nil && imageView != nil
+
+        {
+
+            imageView!.image = image!
+
+            compate(image)
+
+        }else {
+
+            if let url = URL(string: imgUrl){
+
+                DispatchQueue.global(qos: .background).async {
+
+                    () -> Void in
+
+                    let imgdata = NSData(contentsOf: url)
+
+                    DispatchQueue.main.async {
+
+                        () -> Void in
+
+                        imgdata?.write(toFile: urlcatch, atomically: true)
+
+                        let image = UIImage(contentsOfFile:urlcatch)
+
+                        compate(image)
+
+                        if image != nil  {
+
+                            if imageView != nil  {
+
+                                imageView!.image = image!
+
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        }
+
+    }
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+}
+
+
+
+extension ViewController: CLLocationManagerDelegate {
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+
+        
+
+        
+
+        // annotation pin code
+
+        let location = locations.last! as CLLocation
+
+        let userLocation:CLLocation = locations[0] as CLLocation
+
+        let myAnnotation: MKPointAnnotation = MKPointAnnotation()
+
+        myAnnotation.coordinate = CLLocationCoordinate2DMake(userLocation.coordinate.latitude, userLocation.coordinate.longitude)
+
+        myAnnotation.title = "Current location"
+
+        mapView.addAnnotation(myAnnotation)
+
+        
+
+        
+
+        // current location getting code
+
+        currentLocation = location
+
+        let center = CLLocationCoordinate2D(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+
+        let region = MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01))
+
+        
+
+        self.mapView.setRegion(region, animated: true)
+
+        self.locationTableView.reloadData()
+
+        
+
+    }
+
+    
+
+}
+
+
+
+extension ViewController: UITableViewDelegate, UITableViewDataSource {
+
+    func numberOfSections(in tableView: UITableView) -> Int {
+
+        return viewmodelclass.numberOfSection
+
+    }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+
+        return viewmodelclass.numberOfRowsInSection
+
+    }
+
+    
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+
+        let cell = locationTableView.dequeueReusableCell(withIdentifier: reuseIdentifier) as! LocationTableViewCell
+
+        
+
+        if let getObject = viewmodelclass.cellRowAtIndexpath(indexpath: indexPath), let image = getObject.icon, let lat = getObject.geometry?.location?.lat, let lng = getObject.geometry?.location?.lng, let logo = getObject.icon {
+
+            PlaceholderImage(image: UIImage(named: "theater"), imageView: cell.imageLayer, imgUrl: logo) {(image) in
+
+                cell.theatreLabel.text = getObject.name
+
+                cell.imageLayer.image = image
+
+            }
+
+            
+
+            
+
+            // distance calculation code( have to declare current location globally in above extension)
+
+            if let currentLocation = currentLocation {
+
+                
+
+                let DestinationLocation = CLLocation(latitude: lat, longitude: lng)
+
+                let distance = currentLocation.distance(from: DestinationLocation) / 1000
+
+                print(String(format: "The distance to this place is %.01fkm", distance))
+
+                cell.locationLabel.text = String(format: "The distance to this place is %.01fkm", distance)
+
+            }
+
+            return cell
+
+        }
+
+        return cell
+
+    }
+
+    
+
+    
+
+}
+
+
+
+ViewModel Coding:
+
+-----------------
+
+import Foundation
+
+class Viewmodel {
+
+    var reloadClosures:(() -> ())?
+
+    var modelClass: mapModel? {
+
+        didSet {
+
+            self.reloadClosures?()
+
+        }
+
+    }
+
+  
+    
+
+    func getMethod() {
+
+        var request = URLRequest(url: URL(string: "URL")!)
+
+        request.httpMethod = "GET"
+        
+        URLSession.shared.dataTask(with: request, completionHandler: {data, response, error -> Void in do {
+
+            let jsonDecoder = JSONDecoder()
+
+            let responseModel = try jsonDecoder.decode(mapModel?.self, from: data!)
+
+            print(responseModel)
+
+            self.modelClass = responseModel
+
+        } catch {
+
+            print("JSON Serialization error")
+
+            }
+
+            
+        }).resume()
+
+        
+
+    }
+  
+ 
+
+    var numberOfSection: Int {
+
+        return 1
+
+    }
+
+    
+
+    var numberOfRowsInSection: Int {
+
+        return modelClass?.results?.count ?? 0
+
+    }
+
+  
+   
+
+    func cellRowAtIndexpath(indexpath: IndexPath) -> ResultElements? {
+
+        if let getData = modelClass?.results?[indexpath.row] {
+
+            return getData
+
+        }
+
+        return nil
+
+    }
+
+}
+
+
+
+Modelclass Creation - According to JSon:
+
+----------------------------------------
+
+import Foundation
+
+import MapKit
+
+struct mapModel: Decodable {
+
+    var html_attributions: [String]
+
+    var next_page_token: String?
+
+    var results: [ResultElements]?
+
+    var status: String?
+
+}
+
+
+
+struct ResultElements: Decodable {
+
+    var business_status: String?
+
+    var geometry: geometryElements?
+
+    var icon: String?
+
+    var name: String?
+
+    var opening_hours: HoursElements?
+
+    var photos: [PhotoElements]?
+
+    var place_id: String?
+
+    var plus_code: SubItems?
+
+    var rating: Double?
+
+    var reference: String?
+
+    var scope: String?
+
+    var types:[String]?
+
+    var user_ratings_total: Int?
+
+    var vicinity: String?  
+    
+
+}
+
+
+
+struct geometryElements: Decodable {
+
+    var location: locationElements?
+
+    var viewport: viewPortItems?
+
+}
+
+
+
+struct locationElements: Decodable {
+
+    var lat: Double?
+
+    var lng: Double?
+
+}
+
+
+
+struct viewPortItems: Decodable {
+
+    var northeast: locationElements?
+
+    var southwest: locationElements?
+
+}
+
+
+
+struct HoursElements: Decodable {
+
+    var open_now: Bool?
+
+}
+
+
+
+struct PhotoElements: Decodable {
+
+    var height: Int?
+
+    var html_attributions:[String]?
+
+    var photo_reference: String?
+
+    var width: Int?
+
+}
+
+
+
+struct  SubItems: Decodable {
+
+    var compound_code: String?
+
+    var global_code: String?
+
+}
+
+
+
+TableviewCell Coding:
+
+---------------------
+
+
+
+//
+
+//  LocationTableViewCell.swift
+
+//  InnovationTaskMap
+
+//
+
+//  Created by Apple on 05/02/21.
+
+//  Copyright © 2021 Apple. All rights reserved.
+
+//
+
+
+
+import UIKit
+
+
+
+class LocationTableViewCell: UITableViewCell {
+
+    
+
+    @IBOutlet weak var imageLayer: UIImageView!
+
+    @IBOutlet weak var theatreLabel: UILabel!
+
+    @IBOutlet weak var locationLabel: UILabel!
+
+    
+
+    override func awakeFromNib() {
+
+        super.awakeFromNib()
+
+        // Initialization code
+
+    }
+
+    
+
+    override func setSelected(_ selected: Bool, animated: Bool) {
+
+        super.setSelected(selected, animated: animated)
+
+        
+
+        // Configure the view for the selected state
+
+    }
+
+    
+
+}
+
+
+
+
+
+JSON Decoder:
+
+_____________
+
+//
+
+//  json decode.swift
+
+//  InnovationTaskMap
+
+//
+
+//  Created by Apple on 05/02/21.
+
+//  Copyright © 2021 Apple. All rights reserved.
+
+//
+
+
+
+import Foundation
+
+
+
+extension Bundle {
+
+    func decode<T: Decodable>(_ type: T.Type, from file: String, dateDecodingStrategy: JSONDecoder.DateDecodingStrategy = .deferredToDate, keyDecodingStrategy: JSONDecoder.KeyDecodingStrategy = .useDefaultKeys) -> T {
+
+        guard let url = self.url(forResource: file, withExtension: nil) else {
+
+            fatalError("Failed to locate \(file) in bundle.")
+
+        }
+
+        
+
+        guard let data = try? Data(contentsOf: url) else {
+
+            fatalError("Failed to load \(file) from bundle.")
+
+        }
+
+        
+
+        let decoder = JSONDecoder()
+
+        decoder.dateDecodingStrategy = dateDecodingStrategy
+
+        decoder.keyDecodingStrategy = keyDecodingStrategy
+
+        
+
+        do {
+
+            return try decoder.decode(T.self, from: data)
+
+        } catch DecodingError.keyNotFound(let key, let context) {
+
+            fatalError("Failed to decode \(file) from bundle due to missing key '\(key.stringValue)' not found – \(context.debugDescription)")
+
+        } catch DecodingError.typeMismatch(_, let context) {
+
+            fatalError("Failed to decode \(file) from bundle due to type mismatch – \(context.debugDescription)")
+
+        } catch DecodingError.valueNotFound(let type, let context) {
+
+            fatalError("Failed to decode \(file) from bundle due to missing \(type) value – \(context.debugDescription)")
+
+        } catch DecodingError.dataCorrupted(_) {
+
+            fatalError("Failed to decode \(file) from bundle because it appears to be invalid JSON")
+
+        } catch {
+
+            fatalError("Failed to decode \(file) from bundle: \(error.localizedDescription)")
+
+        }
+
+    }
+
+}
+
+...
+
+[Message clipped]  View entire message
